@@ -4,6 +4,8 @@
 #include <ucr/timer.h>
 #include <stdio.h>
 #include <string.h>
+#include <time.h>
+#include <stdlib.h>
 #include "io.h"
 #include "io.c"
 
@@ -94,6 +96,18 @@ unsigned char moveRight(unsigned char location) {
 	return location;
 }
 
+// terrain generation
+// void terrainSetup(unsigned char *terrain) {
+// // 	unsigned char terrainLength = sizeof(terrain) / 8;
+// 	
+// 	for (unsigned char i = 0; i < 128; i++) {
+// // 		unsigned char r = rand();
+// /*		if (r > 25) {*/
+// 			terrain[i] = 'G';
+// /*		}*/
+// 	}
+// }
+
 //--------Find GCD function --------------------------------------------------
 unsigned long int findGCD(unsigned long int a, unsigned long int b)
 {
@@ -135,6 +149,11 @@ const unsigned char screenBlank[32] = {
 	' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' '
 }; // 16 x 2 characters
 
+const unsigned char terrain[32] = {
+	0xFF, ' ', ' ', ' ', ' ', ' ', ' ', 0xFF, ' ', ' ', ' ', ' ', 0xFF, ' ', ' ', ' ',
+	' ', 0xFF, ' ', ' ', ' ', ' ', ' ', ' ', 0xFF, ' ', ' ', ' ', ' ', ' ', ' ', ' '
+};
+
 unsigned char screenBuffer[32] = {
 								' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ',
 								' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' '
@@ -153,6 +172,12 @@ enum display_tick_states {DISPLAY};
 
 int display_tick(int state) {
 	LCD_DisplayString(1, screenBuffer);
+	
+// 	for (unsigned char i = 0; i < 31; i++) {
+// 		LCD_Cursor(i + 1);
+// 		LCD_WriteData(screenBuffer[i]);
+// 	}
+	
 	return state;
 }
 
@@ -276,6 +301,7 @@ int player_one_projectile_tick(int state) {
 			for (unsigned char i = 0; i < 5; i++) {
 				player_one_projectile_location[i] = 255;
 			}
+			PORTB = 0;
 			break;
 			
 		case PLAYER_ONE_PROJECTILE_PLAYING:
@@ -309,6 +335,63 @@ int player_one_projectile_tick(int state) {
 			for (unsigned char i = 0; i < 5; i++) {
 				screenBuffer[player_one_projectile_location[i]] = '-';
 			}
+			
+			// sets the shotLED to the number of leftover projectiles
+			unsigned char projectilesRemaining = 0;
+			for (unsigned char i = 0; i < 5; i++) {
+				if (player_one_projectile_location[i] == 255)
+				{
+					projectilesRemaining = projectilesRemaining << 1;
+					projectilesRemaining = projectilesRemaining + 1;
+				}
+			}
+			PORTB = projectilesRemaining;
+			
+			break;
+	}
+	
+	return state;
+}
+
+enum terrain_tick_states {TERRAIN_INIT, TERRAIN_PLAYING};
+
+int terrain_tick(int state) {
+	
+	static unsigned char terrainShift = 0;
+	
+	switch(state) {
+		case TERRAIN_INIT:
+			if (playFlag == 1)
+			{
+				state = TERRAIN_PLAYING;
+			}
+			else
+			{
+				state = state;
+			}
+			break;
+		case TERRAIN_PLAYING:
+			if (playFlag == 0)
+			{
+				state = TERRAIN_INIT;
+			}
+			else
+			{
+				state = state;
+			}
+			break;
+	}
+	
+	switch(state) {
+		case TERRAIN_INIT:
+			terrainShift = 0;
+			break;
+		case TERRAIN_PLAYING:			
+			for (unsigned char i = 0; i < 16; i++) {
+				screenBuffer[i + 16] = terrain[(i + terrainShift) % 32];
+			}
+			
+			terrainShift = terrainShift + 1;
 			break;
 	}
 	
@@ -335,6 +418,7 @@ unsigned long int display_tick_calc = 200;
 unsigned long int game_start_tick_calc = 200;
 unsigned long int player_one_tick_calc = 200;
 unsigned long int player_one_projectile_tick_calc = 200;
+unsigned long int terrain_tick_calc = 400;
 
 //Calculating GCD
 unsigned long int tmpGCD = 1;
@@ -342,6 +426,7 @@ tmpGCD = findGCD(key_tick_calc, display_tick_calc);
 tmpGCD = findGCD(tmpGCD, game_start_tick_calc);
 tmpGCD = findGCD(tmpGCD, player_one_tick_calc);
 tmpGCD = findGCD(tmpGCD, player_one_projectile_tick_calc);
+tmpGCD = findGCD(tmpGCD, terrain_tick_calc);
 
 //Greatest common divisor for all tasks or smallest time unit for tasks.
 unsigned long int GCD = tmpGCD;
@@ -352,10 +437,11 @@ unsigned long int display_tick_period = display_tick_calc/GCD;
 unsigned long int game_start_tick_period = game_start_tick_calc/GCD;
 unsigned long int player_one_tick_period = player_one_tick_calc/GCD;
 unsigned long int player_one_projectile_tick_period = player_one_projectile_tick_calc/GCD;
+unsigned long int terrain_tick_period = terrain_tick_calc/GCD;
 
 //Declare an array of tasks 
-static task task1, task2, task3, task4, task5;
-task *tasks[] = { &task1, &task2, &task3, &task4, &task5};
+static task task1, task2, task3, task4, task5, task6;
+task *tasks[] = { &task1, &task2, &task3, &task4, &task5, &task6};
 const unsigned short numTasks = sizeof(tasks)/sizeof(task*);
 
 // Task 1
@@ -377,20 +463,30 @@ task3.elapsedTime = 0;//Task current elapsed time.
 task3.TickFct = &game_start_tick;//Function pointer for the tick.
 
 // Task 4
-task4.state = PLAYER_ONE_INIT;//Task initial state.
-task4.period = player_one_tick_period;//Task Period.
+task4.state = TERRAIN_INIT;//Task initial state.
+task4.period = terrain_tick_period;//Task Period.
 task4.elapsedTime = 0;//Task current elapsed time.
-task4.TickFct = &player_one_tick;//Function pointer for the tick.
+task4.TickFct = &terrain_tick;//Function pointer for the tick.
 
 // Task 5
-task5.state = PLAYER_ONE_PROJECTILE_INIT;//Task initial state.
-task5.period = player_one_projectile_tick_period;//Task Period.
+task5.state = PLAYER_ONE_INIT;//Task initial state.
+task5.period = player_one_tick_period;//Task Period.
 task5.elapsedTime = 0;//Task current elapsed time.
-task5.TickFct = &player_one_projectile_tick;//Function pointer for the tick.
+task5.TickFct = &player_one_tick;//Function pointer for the tick.
+
+// Task 6
+task6.state = PLAYER_ONE_PROJECTILE_INIT;//Task initial state.
+task6.period = player_one_projectile_tick_period;//Task Period.
+task6.elapsedTime = 0;//Task current elapsed time.
+task6.TickFct = &player_one_projectile_tick;//Function pointer for the tick.
 
 // Set the timer and turn it on
 TimerSet(GCD);
 TimerOn();
+
+// set RNG and generate terrain
+// srand(time(NULL));
+// terrainSetup(terrain);
 
 unsigned short i; // Scheduler for-loop iterator
 while(1) {
