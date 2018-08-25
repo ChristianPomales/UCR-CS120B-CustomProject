@@ -10,7 +10,7 @@
 #include "io.c"
 
 
-// keypad func
+// keypad function
 unsigned char GetKeypadKey() {
 
 	PORTC = 0xEF; // Enable col 4 with 0, disable others with 1’s
@@ -113,8 +113,73 @@ unsigned char enemyMoveLeft(unsigned char location) {
 	}
 	
 	return location;
+}
+
+// custom character functions
+void LCD_build(unsigned char location, unsigned char *ptr){
+	unsigned char i;
+	if(location<8){
+		LCD_WriteCommand(0x40+(location*8));
+		for(i=0;i<8;i++)
+		LCD_WriteData(ptr[i]);
+	}
+}
+
+void loadPlayerOneSprite() {
+	static unsigned char playerOne[8] = {
+		0b01000,
+		0b01000,
+		0b01100,
+		0b11111,
+		0b11111,
+		0b01100,
+		0b01000,
+		0b01000
+	};
 	
-	return location;
+	LCD_build(0, playerOne);
+}
+
+void loadTerrainSprite() {
+	static unsigned char terrain[8] = {
+		0b11111,
+		0b10101,
+		0b11111,
+		0b10101,
+		0b11111,
+		0b10101,
+		0b11111,
+		0b11111
+	};
+	
+	LCD_build(1, terrain);
+}
+
+void loadEnemySprite() {
+	static unsigned char enemy[8] = {
+		0b00010,
+		0b00110,
+		0b11111,
+		0b00110,
+		0b00110,
+		0b11111,
+		0b00110,
+		0b00010
+	};
+	
+	LCD_build(2, enemy);
+}
+
+void displayPlayerOneSprite() {
+	LCD_WriteData(0);
+}
+
+void displayTerrainSprite() {
+	LCD_WriteData(1);
+}
+
+void displayEnemySprite() {
+	LCD_WriteData(2);
 }
 
 //--------Find GCD function --------------------------------------------------
@@ -156,25 +221,6 @@ unsigned char player_one_projectile_location [5] = {255, 255, 255, 255, 255};
 // enemies and their projectiles
 unsigned char enemy_location [3] = {255, 255, 255};
 // unsigned char enemy_projectile_location [6] = {255, 255, 255, 255, 255, 255};
-	
-const unsigned char startMessage[32] = {
-	'P', 'r', 'e', 's', 's', ' ', 'A', ' ', 't', 'o', ' ', 'S', 't', 'a', 'r', 't',
-	'P', 'r', 'e', 's', 's', ' ', 'D', ' ', 't', 'o', ' ', 'R', 'e', 's', 'e', 't'
-}; // 16 x 2 characters
-
-const unsigned char gameOverMessage[32] = {
-	'G', 'A', 'M', 'E', ' ', 'O', 'V', 'E', 'R', ' ', ' ', ' ', ' ', ' ', ' ', ' ',
-	'P', 'r', 'e', 's', 's', ' ', 'A', ' ', 't', 'o', ' ', 'S', 't', 'a', 'r', 't'
-}; // 16 x 2 characters
-
-const unsigned char pressCToBegin[16] = {
-	'P', 'r', 'e', 's', 's', ' ', 'C', ' ', 't', 'o', ' ', 'B', 'e', 'g', 'i', 'n'
-}; // 16 x 1 characters
-
-const unsigned char screenBlank[32] = {
-	' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ',
-	' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' '
-}; // 16 x 2 characters
 
 const unsigned char terrain[32] = {
 	0xFF, ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', 0xFF, ' ', ' ', ' ',
@@ -194,9 +240,27 @@ int key_tick(int state) {
 	return state;
 }
 
-enum display_tick_states {DISPLAY_START_MESSAGE, DISPLAY_GAMEOVER_MESSAGE, DISPLAY_GAME};
+enum lcd_display_tick_states {DISPLAY_START_MESSAGE, DISPLAY_GAMEOVER_MESSAGE, DISPLAY_GAME};
 
-int display_tick(int state) {
+int lcd_display_tick(int state) {
+	static unsigned char tempScore = 0;
+	static unsigned char hundreds = 0;
+	static unsigned char tens = 0;
+	static unsigned char ones = 0;
+	
+	static const unsigned char startMessage[32] = {
+		'P', 'r', 'e', 's', 's', ' ', 'A', ' ', 't', 'o', ' ', 'S', 't', 'a', 'r', 't',
+		'P', 'r', 'e', 's', 's', ' ', 'D', ' ', 't', 'o', ' ', 'R', 'e', 's', 'e', 't'
+	}; // 16 x 2 characters
+
+	static const unsigned char pressCToBegin[16] = {
+		'P', 'r', 'e', 's', 's', ' ', 'C', ' ', 't', 'o', ' ', 'B', 'e', 'g', 'i', 'n'
+	}; // 16 x 1 characters
+	
+	static const unsigned char screenBlank[32] = {
+		' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ',
+		' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' '
+	}; // 16 x 2 characters
 	
 	switch(state) {
 		case DISPLAY_START_MESSAGE:
@@ -247,12 +311,15 @@ int display_tick(int state) {
 			
 			LCD_DisplayString(1, (const unsigned char *)"SCORE: ");
 			
-			unsigned char tempScore = score;
-			unsigned char ones = tempScore % 10;
+			tempScore = score;
+			
+			ones = tempScore % 10;
 			tempScore = tempScore - ones;
-			unsigned char tens = (tempScore % 100) / 10;
+			
+			tens = (tempScore % 100) / 10;
 			tempScore = tempScore - tens;
-			unsigned char hundreds = (tempScore % 1000) / 100;
+			
+			hundreds = (tempScore % 1000) / 100;
 			tempScore = tempScore - hundreds;
 			
 			LCD_Cursor(8);
@@ -294,8 +361,19 @@ int display_tick(int state) {
 			// display player one
 			screenBuffer[player_one_location] = '>';
 			
-			for (unsigned char i = 0; i < 32; i++) {
+			for (unsigned char i = 0; i < 32; i++) {				
 				LCD_Cursor(i + 1);
+				
+				if (screenBuffer[i] == '>') {
+					displayPlayerOneSprite();
+				}
+				else if (screenBuffer[i] == 0xFF) {
+					displayTerrainSprite();
+				}
+				else if (screenBuffer[i] == '@') {
+					displayEnemySprite();
+				}
+				
 				LCD_WriteData(screenBuffer[i]);
 				LCD_Cursor(0);
 			}
@@ -341,15 +419,12 @@ int game_start_tick(int state) {
 	switch(state) {
 		case GAME_INIT:
 			playFlag = 0;
-// 			memcpy(messageBuffer, startMessage, sizeof(startMessage));
 			break;
 		case GAME_PLAYING:
 			playFlag = 1;
-// 			memcpy(messageBuffer, screenBlank, sizeof(screenBlank));
 			break;
 		case GAME_OVER:
 			playFlag = 0;
-/*			memcpy(messageBuffer, gameOverMessage, sizeof(gameOverMessage));*/
 			break;
 	}
 	
@@ -640,12 +715,21 @@ int collision_tick(int state) {
 				}
 			}
 			
-			// check if player hit something, game over
-
+			// terrain collision detection
+			for (unsigned char i = 0; i < 16; i++) {
+				unsigned char terrain_location = i + 16;
+				unsigned char terrain_sprite = terrain[(i + terrainShift) % 32];
+				
+				if ((terrain_sprite != ' ') && (terrain_location == player_one_location)) {
+					gameOverFlag = 1;
+				}
+				
+			}
+			
+			// enemy collision detection
 			for (unsigned char i = 0; i < 3; i++) {
 				if (player_one_location == enemy_location[i]) {
 					gameOverFlag = 1;
-// 					playFlag = 2;
 				}
 			}
 			break;
@@ -667,7 +751,7 @@ int main() {
 	unsigned long int player_one_tick_calc = 200;
 	unsigned long int player_one_projectile_tick_calc = 200;
 	unsigned long int terrain_tick_calc = 400;
-	unsigned long int enemy_tick_calc = 500;
+	unsigned long int enemy_tick_calc = 400;
 	unsigned long int collision_tick_calc = 200;
 
 	//Calculating GCD
@@ -708,7 +792,7 @@ int main() {
 	task2.state = DISPLAY_START_MESSAGE;//Task initial state.
 	task2.period = display_tick_period;//Task Period.
 	task2.elapsedTime = 0;//Task current elapsed time.
-	task2.TickFct = &display_tick;//Function pointer for the tick.
+	task2.TickFct = &lcd_display_tick;//Function pointer for the tick.
 
 	// Task 3
 	task3.state = GAME_INIT;//Task initial state.
@@ -750,8 +834,11 @@ int main() {
 	TimerSet(GCD);
 	TimerOn();
 
-	// initialize LCD
+	// initialize LCD and sprites
 	LCD_init();
+ 	loadPlayerOneSprite();
+	loadTerrainSprite();
+	loadEnemySprite();
 
 	// initialize RNG
 	srand(time(NULL));
