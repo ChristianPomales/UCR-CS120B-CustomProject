@@ -9,6 +9,8 @@
 #include "io.h"
 #include "io.c"
 
+#define ON 1
+#define OFF 0
 
 // keypad function
 unsigned char GetKeypadKey() {
@@ -182,6 +184,77 @@ void displayEnemySprite() {
 	LCD_WriteData(2);
 }
 
+// shift register code
+void transmit_data(unsigned char data) {
+	for (unsigned char i = 0; i < 8 ; ++i) {
+		// Sets SRCLR to 1 allowing data to be set
+		// Also clears SRCLK in preparation of sending data
+		PORTA = 0x08 << 2;
+		// set SER = next bit of data to be sent.
+		PORTA |= ((data >> i) & 0x01) << 2;
+		// set SRCLK = 1. Rising edge shifts next bit of data into the shift register
+		PORTA |= 0x02 << 2;
+	}
+	// set RCLK = 1. Rising edge copies data from “Shift” register to “Storage” register
+	PORTA |= 0x04 << 2;
+	// clears all lines in preparation of a new transmission
+	PORTA = 0x00 << 2;
+}
+
+// 7 segment display code -> display is common annode
+void displayLives(unsigned char lives) {
+	static unsigned char display = 0;
+	
+	switch (lives) {
+		case 0:
+			display = 0x3F;
+			break;
+			
+		case 1:
+			display = 0x06;
+			break;
+			
+		case 2:
+			display = 0x5B;
+			break;
+			
+		case 3:
+			display = 0x4F;
+			break;
+			
+		case 4:
+			display = 0x66;
+			break;
+			
+		case 5:
+			display = 0x6D;
+			break;
+			
+		case 6:
+			display = 0x7D;
+			break;
+			
+		case 7:
+			display = 0x07;
+			break;
+			
+		case 8:
+			display = 0x7F;
+			break;
+			
+		case 9:
+			display = 0x67;
+			break;
+	}
+	
+	transmit_data(~display);
+}
+
+void clearLives() {
+	transmit_data(0xFF);
+}
+
+
 //--------Find GCD function --------------------------------------------------
 unsigned long int findGCD(unsigned long int a, unsigned long int b)
 {
@@ -211,6 +284,7 @@ typedef struct _task {
 unsigned char playFlag = 0;
 unsigned char gameOverFlag = 0;
 unsigned char score = 0;
+unsigned char lives = 0;
 unsigned char key = ' '; // key pressed
 unsigned char terrainShift = 0; // how much the terrain should be moved by
 
@@ -304,6 +378,9 @@ int lcd_display_tick(int state) {
 				LCD_WriteData(startMessage[i]);
 				LCD_Cursor(0);
 			}
+			
+			clearLives();
+			
 			break;
 			
 		case DISPLAY_GAMEOVER_MESSAGE:
@@ -336,6 +413,8 @@ int lcd_display_tick(int state) {
 				LCD_WriteData(pressCToBegin[i]);
 				LCD_Cursor(0);
 			}
+			
+			clearLives();
 			
 			break;
 			
@@ -377,6 +456,9 @@ int lcd_display_tick(int state) {
 				LCD_WriteData(screenBuffer[i]);
 				LCD_Cursor(0);
 			}
+			
+			displayLives(lives);
+			
 			break;
 	}
 	
@@ -394,6 +476,7 @@ int game_start_tick(int state) {
 	switch(state) {
 		case GAME_INIT:
 			if (key == 'A') {
+				lives = 5;
 				state = GAME_PLAYING;
 			} else {
 				state = state;
@@ -716,20 +799,41 @@ int collision_tick(int state) {
 			}
 			
 			// terrain collision detection
+			static unsigned char terrainCollisionCounter = 0;
 			for (unsigned char i = 0; i < 16; i++) {
 				unsigned char terrain_location = i + 16;
 				unsigned char terrain_sprite = terrain[(i + terrainShift) % 32];
 				
 				if ((terrain_sprite != ' ') && (terrain_location == player_one_location)) {
-					gameOverFlag = 1;
+					terrainCollisionCounter++;
+					// make sure we only count lives lost once
+					if (terrainCollisionCounter < 2) {
+						if (lives > 1) {
+							lives--;
+						} else {
+						gameOverFlag = 1;
+						}
+					} else {
+						terrainCollisionCounter = 0;
+					}
 				}
 				
 			}
 			
 			// enemy collision detection
+			static unsigned char enemyCollisionCounter = 0;
 			for (unsigned char i = 0; i < 3; i++) {
 				if (player_one_location == enemy_location[i]) {
-					gameOverFlag = 1;
+					// make sure we only count lives lost once
+					if (enemyCollisionCounter < 2) {
+						if (lives > 1) {
+							lives--;
+							} else {
+							gameOverFlag = 1;
+						}
+					} else {
+						enemyCollisionCounter = 0;
+					}
 				}
 			}
 			break;
