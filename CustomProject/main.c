@@ -1,5 +1,6 @@
 #include <avr/io.h>
 #include <avr/interrupt.h>
+#include <avr/eeprom.h>
 #include <ucr/bit.h>
 #include <ucr/timer.h>
 #include <stdio.h>
@@ -298,6 +299,14 @@ void clearLives() {
 	transmit_data(0xFF);
 }
 
+// eeprom functions
+void saveScore(unsigned char score) {
+	eeprom_write_byte(0, score);
+}
+
+unsigned char loadScore() {
+	return eeprom_read_byte(0);
+}
 
 //--------Find GCD function --------------------------------------------------
 unsigned long int findGCD(unsigned long int a, unsigned long int b)
@@ -514,12 +523,17 @@ enum game_start_tick_states {GAME_INIT, GAME_PLAYING, GAME_OVER};
 int game_start_tick(int state) {
 	
 	if (gameOverFlag == 1) {
+		saveScore(score);
 		state = GAME_OVER;
 	}
 	
 	switch(state) {
 		case GAME_INIT:
 			if (key == 'A') {
+				unsigned char tempScore = loadScore();
+				if (tempScore != 0) {
+					score = tempScore;
+				}
 				lives = 5;
 				state = GAME_PLAYING;
 			} else {
@@ -808,7 +822,7 @@ int collision_tick(int state) {
 	switch(state) {
 		case COLLISION_INIT:
 			if (playFlag == 1) {
-				score = 0;
+				//score = 0;
 				state = COLLISION_PLAYING;
 			}
 			else {
