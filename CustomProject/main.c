@@ -354,11 +354,6 @@ const unsigned char terrain[32] = {
 	' ', 0xFF, ' ', ' ', ' ', ' ', ' ', ' ', 0xFF, ' ', ' ', ' ', ' ', ' ', ' ', ' '
 };
 
-unsigned char screenBuffer[32] = {
-								' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ',
-								' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' '
-}; // 16 x 2 characters
-
 //--------User defined FSMs---------------------------------------------------
 enum key_tick_states {FETCHKEY};
 	
@@ -379,12 +374,13 @@ int lcd_display_tick(int state) {
 		'P', 'r', 'e', 's', 's', ' ', 'A', ' ', 't', 'o', ' ', 'S', 't', 'a', 'r', 't',
 		'P', 'r', 'e', 's', 's', ' ', 'D', ' ', 't', 'o', ' ', 'R', 'e', 's', 'e', 't'
 	}; // 16 x 2 characters
-
-	static const unsigned char pressCToBegin[16] = {
-		'P', 'r', 'e', 's', 's', ' ', 'C', ' ', 't', 'o', ' ', 'B', 'e', 'g', 'i', 'n'
-	}; // 16 x 1 characters
 	
-	static const unsigned char screenBlank[32] = {
+	static unsigned char scoreMessage[32] = {
+		'T', 'o', 't', 'a', 'l', ' ', 'K', 'i', 'l', 'l', 's', ':', ' ', ' ', ' ', ' ',
+		'P', 'r', 'e', 's', 's', ' ', 'C', ' ', 't', 'o', ' ', 'B', 'e', 'g', 'i', 'n'
+	}; // 16 x 2 characters
+	
+	static unsigned char screenBuffer[32] = {
 		' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ',
 		' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' '
 	}; // 16 x 2 characters
@@ -413,6 +409,24 @@ int lcd_display_tick(int state) {
 			
 		case DISPLAY_GAME:
 			if (gameOverFlag == 1) {
+				LCD_ClearScreen();
+				clearLives();
+				
+				tempScore = score;
+				
+				ones = tempScore % 10;
+				tempScore = tempScore - ones;
+				
+				tens = (tempScore % 100) / 10;
+				tempScore = tempScore - tens;
+				
+				hundreds = (tempScore % 1000) / 100;
+				tempScore = tempScore - hundreds;
+				
+				scoreMessage[13] = '0' + hundreds;
+				scoreMessage[14] = '0' + tens;
+				scoreMessage[15] = '0' + ones;
+				
 				state = DISPLAY_GAMEOVER_MESSAGE;
 			}
 			else if (playFlag == 0) {
@@ -426,6 +440,7 @@ int lcd_display_tick(int state) {
 	
 	switch(state) {
 		case DISPLAY_START_MESSAGE:
+		
 			for (unsigned char i = 0; i < 32; i++) {
 				LCD_Cursor(i + 1);
 				LCD_WriteData(startMessage[i]);
@@ -437,44 +452,22 @@ int lcd_display_tick(int state) {
 			break;
 			
 		case DISPLAY_GAMEOVER_MESSAGE:
-			LCD_ClearScreen();
 			
-			LCD_DisplayString(1, (const unsigned char *)"SCORE: ");
-			
-			tempScore = score;
-			
-			ones = tempScore % 10;
-			tempScore = tempScore - ones;
-			
-			tens = (tempScore % 100) / 10;
-			tempScore = tempScore - tens;
-			
-			hundreds = (tempScore % 1000) / 100;
-			tempScore = tempScore - hundreds;
-			
-			LCD_Cursor(8);
-			LCD_WriteData('0' + hundreds);
-			
-			LCD_Cursor(9);
-			LCD_WriteData('0' + tens);
-			
-			LCD_Cursor(10);
-			LCD_WriteData('0' + ones);
-			
-			for (unsigned char i = 0; i < 16; i++) {
-				LCD_Cursor(i + 17);
-				LCD_WriteData(pressCToBegin[i]);
+			for (unsigned char i = 0; i < 32; i++) {
+				LCD_Cursor(i + 1);
+				LCD_WriteData(scoreMessage[i]);
 				LCD_Cursor(0);
 			}
-			
-			clearLives();
 			
 			break;
 			
 		case DISPLAY_GAME:
-			// ELEMENTS ARE COMPOSITED FROM BACK TO FRONT
-			memcpy(screenBuffer, screenBlank, sizeof(screenBlank));
 			
+			for (unsigned char i = 0; i < 32; i++) {
+				screenBuffer[i] = ' ';
+			}
+			
+			// ELEMENTS ARE COMPOSITED FROM BACK TO FRONT			
 			// displays terrain
 			for (unsigned char i = 0; i < 16; i++) {
 				screenBuffer[i + 16] = terrain[(i + terrainShift) % 32];
@@ -822,7 +815,6 @@ int collision_tick(int state) {
 	switch(state) {
 		case COLLISION_INIT:
 			if (playFlag == 1) {
-				//score = 0;
 				state = COLLISION_PLAYING;
 			}
 			else {
@@ -842,6 +834,7 @@ int collision_tick(int state) {
 	switch(state) {
 		case COLLISION_INIT:
 			break;
+			
  		case COLLISION_PLAYING:
  			// check if player shot an enemy, inc score, remove projectile, remove enemy
 			for (unsigned char i = 0; i < 5; i++) {
