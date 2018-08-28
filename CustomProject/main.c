@@ -340,6 +340,7 @@ unsigned char score = 0;
 unsigned char lives = 0;
 unsigned char key = ' '; // key pressed
 unsigned char terrainShift = 0; // how much the terrain should be moved by
+unsigned char randomCounter = 0; // counter for srand() to seed from
 
 // players and their projectiles
 unsigned char player_one_location = 0;
@@ -528,6 +529,7 @@ int game_start_tick(int state) {
 					score = tempScore;
 				}
 				lives = 5;
+				srand(randomCounter);
 				state = GAME_PLAYING;
 			} else {
 				state = state;
@@ -552,6 +554,7 @@ int game_start_tick(int state) {
 	
 	switch(state) {
 		case GAME_INIT:
+			randomCounter++;
 			playFlag = 0;
 			break;
 		case GAME_PLAYING:
@@ -783,6 +786,8 @@ int enemy_tick(int state) {
 				}
 			}
 			
+			unsigned char tempEnemyLocation[3] = {255, 255, 255};
+			unsigned char moveFlag[3] = {0, 0, 0};
 			// move enemies in random direction - up, down, or froward
 			for (unsigned char i = 0; i < 3; i++) {
 				// determine if enemy exists or not
@@ -791,15 +796,42 @@ int enemy_tick(int state) {
 					unsigned char movementDirection = rand() % 3;
 					switch(movementDirection) {
 						case 0:
-							enemy_location[i] = moveUP(enemy_location[i]);
+							tempEnemyLocation[i] = moveUP(enemy_location[i]);
 							break;
 						case 1:
-							enemy_location[i] = moveDown(enemy_location[i]);
+							tempEnemyLocation[i] = moveDown(enemy_location[i]);
 							break;
 						case 2:
-							enemy_location[i] = enemyMoveLeft(enemy_location[i]);
+							tempEnemyLocation[i] = enemyMoveLeft(enemy_location[i]);
 							break;
 					}
+				}
+			}
+			
+			// check if we're going to move into another enemy
+			for (unsigned char i = 0; i < 3; i++) {
+				if (tempEnemyLocation[i] == enemy_location[i]) {
+					moveFlag[i] = 1;
+				}
+			}
+			
+			// check if we're going to move into a building
+			for (unsigned char i = 0; i < 16; i++) {
+				unsigned char terrain_location = i + 16;
+				unsigned char terrain_sprite = terrain[(i + terrainShift) % 32];
+				
+				for (unsigned char i = 0; i < 3; i++) {
+					if ((terrain_sprite != ' ') && (terrain_location == player_one_location)) {
+						tempEnemyLocation[i] = 1;	
+					}
+				}
+				
+			}
+						
+			// move the parts we can move
+			for (unsigned char i = 0; i < 3; i++) {
+				if (moveFlag[i] == 0) {
+					enemy_location[i] = tempEnemyLocation[i];
 				}
 			}
 			
@@ -1001,8 +1033,8 @@ int main() {
 	loadTerrainSprite();
 	loadEnemySprite();
 
-	// initialize RNG
-	srand(time(NULL));
+// 	initialize RNG
+// 		srand(time(NULL));
 	
 	// initialize PWM
 	PWM_on();
